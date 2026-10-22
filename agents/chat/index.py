@@ -28,7 +28,10 @@ from ..rag import list_ingested
 from ..tools import PAPER_TOOLS
 
 
-load_dotenv()
+# override=True：EdgeOne CLI (makers dev) 会向进程注入自家的 AI_GATEWAY_API_KEY /
+# AI_GATEWAY_BASE_URL（内置 Makers 网关），默认 load_dotenv 不覆盖已有变量，会导致
+# .env 里的智谱配置被顶掉 → 401 "API key not found"。这里强制让 .env 赢回来。
+load_dotenv(override=True)
 
 logger = create_logger("chat")
 
