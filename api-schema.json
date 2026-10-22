@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "agent": "paper-survey-agent",
+  "version": "1.0.0",
+  "description": "论文调研 Agent 的工具契约。每个 tool 对应 agents/tools.py 里一个 @function_tool，记录其上游数据源、HTTP 方法与端点、入参与返回字段，供前端 ToolIndicators、联调与验收对照使用。",
+  "conventions": {
+    "paper_id": "统一带类型前缀，可跨数据源反解：S2:<paperId> | DOI:<10.xxxx/...> | ARXIV:<2405.01234> | OA:<W123456>",
+    "return_format": "所有工具返回 JSON 字符串；解析失败或上游不可用时返回 {\"ok\": false, \"error\": ..., \"hint\": ...}，不抛异常给模型",
+    "throttle": "Semantic Scholar 相邻请求间隔 >= 1.2s；429/5xx 指数退避 2/4/8/16s，共 4 次重试；arXiv 相邻请求间隔 >= 3s",
+    "fallback": "S2 整站 429 时自动切换 OpenAlex，返回体 source 字段标明实际来源"
+  },
+  "tools": [
+    {
+      "name": "search_papers",
+      "description": "按主题关键词检索论文，返回标题/作者/年份/被引数/venue/arXivID/DOI/开放获取PDF/摘要。文献综述的第一步。",
+      "method": "GET",
+      "endpoint": "https://api.semanticscholar.org/graph/v1/paper/search",
+      "fallback": {
+        "method": "GET",
+        "endpoint": "https://api.openalex.org/works"
+      },
+      "module": "agents/tools.py",
+      "params": {
+        "query": { "type": "string", "required": true, "description": "检索关键词，英文效果最好" },
+        "limit": { "type": "integer", "required": false, "default": 8, "minimum": 1, "maximum": 20 },
+        "year_from": { "type": "integer", "required": false, "default": 0, "description": "起始年份，0 表示不限" },
+        "year_to": { "type": "integer", "required": false, "default": 0, "description": "结束年份，0 表示不限" }
+      },
+      "returns": ["ok", "query", "source", "count", "papers[paper_id,title,authors,year,venue,abstract,citation_count,reference_count,influential_citation_count,arxiv_id,doi,open_access_pdf,url]"],
+      "upstream_fields": "paperId,title,authors,year,venue,abstract,tldr,citationCount,referenceCount,influentialCitationCount,externalIds,isOpenAccess,openAccessPdf,url"
+    },
+    {
+      "name": "get_paper_detail",
+      "description": "取单篇论文的完整元数据与摘要，用于确认基本信息；不产生正文证据。",
+      "method": "GET",
+      "endpoint": "https://api.semanticscholar.org/graph/v1/paper/{paper_id}",
+      "fallback": {
+        "method": "GET",
+        "endpoint": "https://api.openalex.org/works/doi:{doi}"
+      },
+      "module": "agents/tools.py",
+      "params": {
+        "paper_id": { "type": "string", "required": true, "description": "S2:xxxx / DOI:10.xxxx / ARXIV:2005.11401" }
+      },
+      "returns": ["ok", "source", "paper_id", "paper"]
+    },
+    {
+      "name": "get_citations",
+      "description": "查某篇论文的后续引用工作（谁引用了它、谁改进了它），用于梳理技术演进脉络。",
+      "method": "GET",
+      "endpoint": "https://api.semanticscholar.org/graph/v1/paper/{paper_id}/citations",
+      "fallback": {
+        "method": "GET",
+        "endpoint": "https://api.openalex.org/works?filter=cites:{work_id}"
+      },
+      "module": "agents/tools.py",
+      "params": {
+        "paper_id": { "type": "string", "required": true },
+        "limit": { "type": "integer", "required": false, "default": 8, "minimum": 1, "maximum": 20 }
+      },
+      "returns": ["ok", "source", "paper_id", "count", "citations[paper_id,title,year,venue,citation_count,arxiv_id,doi,is_influential]"]
+    },
+    {
+      "name": "search_arxiv_latest",
+      "description": "在 arXiv 按提交时间倒序检索最新预印本，弥补期刊数据库滞后。",
+      "method": "GET",
+      "endpoint": "https://export.arxiv.org/api/query",
+      "module": "agents/tools.py",
+      "params": {
+        "query": { "type": "string", "required": true, "description": "空格分词后按 AND 组合" },
+        "days": { "type": "integer", "required": false, "default": 90, "description": "只看最近 N 天提交" },
+        "limit": { "type": "integer", "required": false, "default": 8, "minimum": 1, "maximum": 20 }
+      },
+      "upstream_params": {
+        "search_query": "all:<term> AND all:<term>",
+        "sortBy": "submittedDate",
+        "sortOrder": "descending"
+      },
+      "returns": ["ok", "source", "count", "papers[paper_id,title,authors,year,submitted_at,arxiv_id,open_access_pdf,abstract]"],
+      "notes": "arXiv 不提供被引数，citation_count 恒为 null"
+    },
+    {
+      "name": "ingest_paper",
+      "description": "抓取论文全文，切片并向量化入库。入库后该论文的方法/超参/实验细节才能被检索。",
+      "method": "COMPOSITE",
+      "endpoint": "https://arxiv.org/html/{arxiv_id} -> (回退) 开放获取 PDF -> (最后) 摘要",
+      "upstreams": [
+        { "step": "元数据解析", "method": "GET", "endpoint": "https://api.semanticscholar.org/graph/v1/paper/{paper_id}" },
+        { "step": "全文-1  arXiv HTML", "method": "GET", "endpoint": "https://arxiv.org/html/{arxiv_id}" },
+        { "step": "全文-2  OA PDF 直链", "method": "GET", "endpoint": "https://api.unpaywall.org/v2/{doi}?email={UNPAYWALL_EMAIL}" },
+        { "step": "全文-3  PDF 下载", "method": "GET", "endpoint": "https://arxiv.org/pdf/{arxiv_id}" },
+        { "step": "向量化", "method": "POST", "endpoint": "{EMBEDDING_BASE_URL}/embeddings" },
+        { "step": "落地", "method": "LOCAL", "endpoint": "sqlite://{VECTOR_STORE_PATH}#papers,chunks" }
+      ],
+      "module": "agents/rag.py",
+      "params": {
+        "paper_id": { "type": "string", "required": true },
+        "force": { "type": "boolean", "required": false, "default": false, "description": "true 表示已入库也重新抓取" }
+      },
+      "returns": ["ok", "paper_id", "title", "fulltext_source(arxiv_html|pdf|abstract)", "sections", "n_chunks", "n_chars", "store", "abstract_only"]
+    },
+    {
+      "name": "search_passages",
+      "description": "混合检索：BM25 关键词 + 向量语义，用 RRF(k=60) 融合，返回带 paper_id 与片段序号的原文片段。所有事实性结论的唯一证据来源。",
+      "method": "LOCAL",
+      "endpoint": "sqlite://{VECTOR_STORE_PATH}#chunks + POST {EMBEDDING_BASE_URL}/embeddings",
+      "upstreams": [
+        { "step": "查询向量化", "method": "POST", "endpoint": "{EMBEDDING_BASE_URL}/embeddings" },
+        { "step": "候选片段读取", "method": "LOCAL", "endpoint": "sqlite://{VECTOR_STORE_PATH}#chunks" }
+      ],
+      "module": "agents/rag.py",
+      "params": {
+        "query": { "type": "string", "required": true },
+        "paper_id": { "type": "string", "required": false, "default": "", "description": "留空则在全部已入库论文中检索" },
+        "top_k": { "type": "integer", "required": false, "default": 6, "minimum": 1, "maximum": 20 }
+      },
+      "fusion": {
+        "bm25": "Okapi BM25, k1=1.5, b=0.75",
+        "vector": "bge-m3 1024 维，入库前 L2 归一化，点积即余弦",
+        "rrf": "score = sum(1 / (60 + rank))"
+      },
+      "returns": ["ok", "query", "scope", "candidates", "bm25_hits", "vector_hits", "hits[chunk_id,paper_id,chunk_index,section,rrf_score,text]"]
+    },
+    {
+      "name": "list_ingested_papers",
+      "description": "列出当前已入库、可追问细节的论文清单及片段数。",
+      "method": "LOCAL",
+      "endpoint": "sqlite://{VECTOR_STORE_PATH}#papers",
+      "module": "agents/tools.py",
+      "params": {},
+      "returns": ["ok", "store", "count", "papers[paper_id,title,year,venue,fulltext_source,n_chunks,n_chars,ingested_at]"]
+    }
+  ],
+  "rate_limits": {
+    "semantic_scholar": {
+      "min_interval_seconds": 1.2,
+      "max_retries": 4,
+      "backoff": "2s -> 4s -> 8s -> 16s（含 0-0.4s 抖动）",
+      "retry_on": [429, 500, 502, 503, 504],
+      "auth_header": "x-api-key: {S2_API_KEY}（可空，空则走共享池）"
+    },
+    "arxiv": {
+      "min_interval_seconds": 3,
+      "auth_header": "无，仅需 User-Agent"
+    },
+    "openalex": {
+      "min_interval_seconds": 0.3,
+      "polite_pool": "mailto={OPENALEX_MAILTO}"
+    },
+    "embedding": {
+      "batch_size": 16,
+      "max_retries": 3,
+      "expected_dimension": 1024
+    }
+  },
+  "env": {
+    "required": ["AI_GATEWAY_API_KEY", "AI_GATEWAY_BASE_URL", "EMBEDDING_API_KEY", "EMBEDDING_BASE_URL", "EMBEDDING_MODEL"],
+    "optional": ["AI_GATEWAY_MODEL", "S2_API_KEY", "OPENALEX_MAILTO", "UNPAYWALL_EMAIL", "VECTOR_STORE_PATH"],
+    "defaults": { "VECTOR_STORE_PATH": "./data/store.sqlite" }
+  }
+}
