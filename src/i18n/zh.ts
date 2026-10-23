@@ -1,26 +1,29 @@
 const zh = {
   // Header
-  "app.title": "OpenAI Agents Starter",
-  "app.subtitle": "运行在 EdgeOne Makers 上，支持会话记忆、Agent Tools",
+  "app.title": "论文调研 Agent",
+  "app.subtitle": "可溯源的文献综述助手",
 
   // Empty state
-  "empty.title": "OpenAI Agents Starter",
-  "empty.hint": "我是运行在 EdgeOne 环境中的 OpenAI Agents，支持自定义工具、会话记忆，并帮助你完成天气查询、穿衣建议、翻译和文本统计。",
-  "empty.features": "EdgeOne Store · Session Memory · Agent Tools",
+  "empty.title": "论文调研 Agent",
+  "empty.hint": "我检索论文原文、逐条切片入库，回答中每个结论都标注出处。检索不到证据时我会直说，不凭常识编造。",
+  "empty.features": "混合检索 · 引用溯源 · 全文入库",
 
   // Chat input
-  "chat.placeholder": "发消息…  ⏎ 发送 · Shift+⏎ 换行",
-  "chat.hint": "由 OpenAI Agents SDK + EdgeOne Makers 驱动 · 仅供演示",
+  "chat.placeholder": "输入论文主题或问题…  ⏎ 发送 · Shift+⏎ 换行",
+  "chat.hint": "由 OpenAI Agents SDK + EdgeOne Makers 驱动 · 结论可逐条溯源",
 
   // Preset questions
-  "preset.1": "现在北京天气怎么样，有什么穿衣建议吗？",
-  "preset.2": "帮我翻译英文\"你好，欢迎来到北京！\"，并统计翻译字符数。",
+  "preset.1": "帮我综述一下 RAG 在检索器训练上的进展",
+  "preset.2": "这篇论文的实验设置是什么？用的什么数据集？",
 
-  // Tool indicators
-  "tool.weather": "天气查询",
-  "tool.clothing": "穿衣建议",
-  "tool.translate": "文本翻译",
-  "tool.statistics": "文本统计",
+  // Tool indicators —— 键名与 agents/tools.py 的 PAPER_TOOLS 一一对应
+  "tool.searchPapers": "论文检索",
+  "tool.paperDetail": "论文详情",
+  "tool.citations": "引用溯源",
+  "tool.arxivLatest": "最新预印本",
+  "tool.ingestPaper": "全文入库",
+  "tool.searchPassages": "片段检索",
+  "tool.listIngested": "库内清单",
 
   // Status & errors
   "status.error": "⚠️ 请求失败，请检查后端服务是否启动。",

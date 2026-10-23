@@ -1,26 +1,29 @@
 const en = {
   // Header
-  "app.title": "OpenAI Agents Starter",
-  "app.subtitle": "Running on EdgeOne Makers with session memory & Agent Tools",
+  "app.title": "Paper Survey Agent",
+  "app.subtitle": "A literature-review assistant with traceable citations",
 
   // Empty state
-  "empty.title": "OpenAI Agents Starter",
-  "empty.hint": "I'm an OpenAI Agent running on EdgeOne with custom tools and session memory. I can help with weather, clothing advice, translation, and text statistics.",
-  "empty.features": "EdgeOne Store · Session Memory · Agent Tools",
+  "empty.title": "Paper Survey Agent",
+  "empty.hint": "I retrieve paper full texts, chunk and index them, then answer with a citation on every claim. When the evidence is missing, I say so instead of guessing.",
+  "empty.features": "Hybrid Retrieval · Traceable Citations · Full-text Index",
 
   // Chat input
-  "chat.placeholder": "Type a message...  ⏎ Send · Shift+⏎ Newline",
-  "chat.hint": "Powered by OpenAI Agents SDK + EdgeOne Makers · Demo only",
+  "chat.placeholder": "Ask about a paper or topic...  ⏎ Send · Shift+⏎ Newline",
+  "chat.hint": "Powered by OpenAI Agents SDK + EdgeOne Makers · Every claim is traceable",
 
   // Preset questions
-  "preset.1": "What is the weather like in Beijing now? Any clothing suggestions?",
-  "preset.2": "Translate \"Hello, welcome to Beijing!\" into Chinese and count the characters.",
+  "preset.1": "Summarise the progress of retriever training in RAG",
+  "preset.2": "What is the experimental setup of this paper? Which datasets were used?",
 
-  // Tool indicators
-  "tool.weather": "Weather",
-  "tool.clothing": "Clothing",
-  "tool.translate": "Translate",
-  "tool.statistics": "Statistics",
+  // Tool indicators —— keys mirror PAPER_TOOLS in agents/tools.py
+  "tool.searchPapers": "Search",
+  "tool.paperDetail": "Details",
+  "tool.citations": "Citations",
+  "tool.arxivLatest": "arXiv",
+  "tool.ingestPaper": "Ingest",
+  "tool.searchPassages": "Passages",
+  "tool.listIngested": "Library",
 
   // Status & errors
   "status.error": "Request failed. Please check if the backend service is running.",

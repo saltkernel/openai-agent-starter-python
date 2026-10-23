@@ -24,19 +24,54 @@ import { I18nProvider, LangToggle, useT, MessageKeys } from './i18n';
 import { deleteSnapshot, loadSnapshot, saveSnapshot } from './lib/chatUiStore';
 import styles from './App.module.css';
 
-const LAMP_IDS = ['get_weather', 'get_clothing_advice', 'translate_text', 'text_statistics'] as const;
+/**
+ * 工具指示灯映射。
+ *
+ * 键必须与 agents/tools.py 里 PAPER_TOOLS 的函数名（= 后端 tool_called 事件里的
+ * tool 字段）逐一对应，否则工具真被调用时指示灯不会亮（LAMP_I18N_KEYS 查不到 key）。
+ *
+ * 七个工具都要在 LAMP_I18N_KEYS / LAMP_ICONS 里登记；LAMP_IDS 只决定顶部「显示」
+ * 哪几个——头顶空间有限，只放最核心的四个，其余三个仍然能正常点亮/无灯但文案齐全。
+ */
+const ALL_TOOL_IDS = [
+  'search_papers',
+  'get_paper_detail',
+  'get_citations',
+  'search_arxiv_latest',
+  'ingest_paper',
+  'search_passages',
+  'list_ingested_papers',
+] as const;
+
+/** 顶部实际渲染的四个（其余三个不占位，但仍登记文案以便将来放开） */
+const LAMP_IDS = ['search_papers', 'get_paper_detail', 'ingest_paper', 'search_passages'] as const;
+
 const LAMP_ICONS: Record<string, string> = {
-  get_weather: '☀️',
-  get_clothing_advice: '👔',
-  translate_text: '🌐',
-  text_statistics: '📊',
+  search_papers: '🔍',
+  get_paper_detail: '📄',
+  get_citations: '🔗',
+  search_arxiv_latest: '📰',
+  ingest_paper: '📥',
+  search_passages: '🧩',
+  list_ingested_papers: '📚',
 };
+
 const LAMP_I18N_KEYS: Record<string, string> = {
-  get_weather: 'tool.weather',
-  get_clothing_advice: 'tool.clothing',
-  translate_text: 'tool.translate',
-  text_statistics: 'tool.statistics',
+  search_papers: 'tool.searchPapers',
+  get_paper_detail: 'tool.paperDetail',
+  get_citations: 'tool.citations',
+  search_arxiv_latest: 'tool.arxivLatest',
+  ingest_paper: 'tool.ingestPaper',
+  search_passages: 'tool.searchPassages',
+  list_ingested_papers: 'tool.listIngested',
 };
+
+// 编译期一致性护栏：登记表必须覆盖全部工具，少一个就类型报错，避免静默漏灯
+type _ToolIdCoverage =
+  | Exclude<(typeof ALL_TOOL_IDS)[number], keyof typeof LAMP_ICONS>
+  | Exclude<(typeof ALL_TOOL_IDS)[number], keyof typeof LAMP_I18N_KEYS>;
+const _assertToolCoverage: [_ToolIdCoverage] extends [never] ? true : never = true;
+void _assertToolCoverage;
 
 const CONVERSATION_ID_STORAGE_KEY = 'eo_conversation_id';
 
