@@ -34,10 +34,25 @@ EXPECTED_DIM = 1024
 TIMEOUT = 60
 S2_COOL = 15  # S2 遇 429 后的冷却秒数（无 Retry-After，只能经验值）
 
+# 与 agents/chat/index.py 保持同一套优先级：LLM_* 优先，AI_GATEWAY_* 兜底
+_ALIASES = {
+    "AI_GATEWAY_API_KEY": ("LLM_API_KEY", "AI_GATEWAY_API_KEY"),
+    "AI_GATEWAY_BASE_URL": ("LLM_BASE_URL", "AI_GATEWAY_BASE_URL"),
+    "AI_GATEWAY_MODEL": ("LLM_MODEL", "AI_GATEWAY_MODEL"),
+}
+
 
 def env(name: str, default: str = "") -> str:
-    """读取并去掉首尾空白 —— .env 里 `KEY= value` 这种写法会带前导空格。"""
-    return (os.getenv(name) or default).strip()
+    """读取并去掉首尾空白 —— .env 里 `KEY= value` 这种写法会带前导空格。
+
+    LLM_* 优先于 AI_GATEWAY_*：Makers 沙箱线上会预置 AI_GATEWAY_*（平台内置网关），
+    同名变量会被顶掉，所以真实生效的配置要用 LLM_* 这套名字。
+    """
+    for candidate in _ALIASES.get(name, (name,)):
+        value = (os.getenv(candidate) or "").strip()
+        if value:
+            return value
+    return default.strip() if default else ""
 
 
 def mask(v: str) -> str:

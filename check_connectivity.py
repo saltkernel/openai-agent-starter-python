@@ -32,6 +32,13 @@ except Exception:
 ENV_PATH = Path(__file__).resolve().parent / ".env"
 EXPECTED_DIM = 1024
 
+# 与 agents/chat/index.py 同一套优先级：LLM_* 优先，AI_GATEWAY_* 兜底
+_ALIASES = {
+    "AI_GATEWAY_API_KEY": ("LLM_API_KEY", "AI_GATEWAY_API_KEY"),
+    "AI_GATEWAY_BASE_URL": ("LLM_BASE_URL", "AI_GATEWAY_BASE_URL"),
+    "AI_GATEWAY_MODEL": ("LLM_MODEL", "AI_GATEWAY_MODEL"),
+}
+
 # 与教程 tools.py 完全一致的字段串与端点
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
 S2_FIELDS = (
@@ -67,7 +74,12 @@ def mask(value: str) -> str:
 
 
 def env(name: str, default: str = "") -> str:
-    return (os.getenv(name) or default).strip()
+    """LLM_* 优先于 AI_GATEWAY_*（线上平台会预置后者并顶掉同名配置）。"""
+    for candidate in _ALIASES.get(name, (name,)):
+        value = (os.getenv(candidate) or "").strip()
+        if value:
+            return value
+    return default.strip() if default else ""
 
 
 def line(status: str, text: str) -> None:

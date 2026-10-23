@@ -405,9 +405,16 @@ function AppInner() {
         void refreshConversations('replace');
       },
 
-      onError() {
+      onError(err?: Error) {
         clearBotStreaming();
-        updateBotMessage(content => content || t("status.error"));
+        // 后端会把「上游到底怎么失败的」放在 message 里（鉴权失败时还会带 base_url /
+        // model / key 来源）。以前这里直接丢掉，只显示「请检查后端服务是否启动」，
+        // 结果 401 Invalid API key 和「函数没起来」长得一模一样，线上排障只能靠猜。
+        const detail = (err?.message || '').replace(/\s+/g, ' ').trim();
+        const shown = detail
+          ? `⚠️ ${detail.length > 400 ? `${detail.slice(0, 400)}…` : detail}`
+          : t("status.error");
+        updateBotMessage(content => content || shown);
         finishStream();
       },
     }, conversationIdRef.current, {

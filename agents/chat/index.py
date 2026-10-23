@@ -31,19 +31,84 @@ from ..tools import PAPER_TOOLS
 # override=True：EdgeOne CLI (makers dev) 会向进程注入自家的 AI_GATEWAY_API_KEY /
 # AI_GATEWAY_BASE_URL（内置 Makers 网关），默认 load_dotenv 不覆盖已有变量，会导致
 # .env 里的智谱配置被顶掉 → 401 "API key not found"。这里强制让 .env 赢回来。
+# 注意：线上沙箱没有 .env（被 .gitignore 排除），override 救不了，见下方配置解析。
 load_dotenv(override=True)
 
 logger = create_logger("chat")
 
 
+# ========== LLM 配置解析 ==========
+# 线上 401 的真实成因（踩坑记录）：
+#   1. `.env` 在 `.gitignore` 里，永远不会随部署上传 → 线上沙箱里根本没有智谱那套凭据；
+#   2. Makers 沙箱会预置同名变量 AI_GATEWAY_API_KEY / AI_GATEWAY_BASE_URL（平台内置网关），
+#      裸 os.getenv 读到的就是平台网关键，请求被发往平台网关 → 401 auth_failed
+#      "Invalid API key"（智谱自己的 401 完全不长这样：{"error":{"code":"1000",
+#      "message":"身份验证失败。"}}）。
+# 对策：配置项一律「项目自有变量优先」。LLM_* 是自定义名字，平台不会注入，控制台里配这套
+# 才不会被顶掉；AI_GATEWAY_* 保留为兼容回退，本地老 .env 不改也能跑。
+_ENV_ALIASES: dict[str, tuple[str, ...]] = {
+    "api_key": ("LLM_API_KEY", "AI_GATEWAY_API_KEY"),
+    "base_url": ("LLM_BASE_URL", "AI_GATEWAY_BASE_URL"),
+    "model": ("LLM_MODEL", "AI_GATEWAY_MODEL"),
+}
+
+
+def _resolve(name: str) -> tuple[str, str]:
+    """按优先级取配置，返回 (值, 命中的变量名)；全空返回 ("", "")。"""
+    for env_name in _ENV_ALIASES[name]:
+        value = (os.getenv(env_name) or "").strip()
+        if value:
+            return value, env_name
+    return "", ""
+
+
+def _mask(secret: str) -> str:
+    """日志/报错里只露头尾，避免把 key 整段回显到前端。"""
+    if not secret:
+        return "<空>"
+    if len(secret) <= 12:
+        return "***"
+    return f"{secret[:6]}…{secret[-4:]}（{len(secret)}字符）"
+
+
+_api_key, _api_key_src = _resolve("api_key")
+_base_url, _base_url_src = _resolve("base_url")
+_model, _model_src = _resolve("model")
+_model = _model or "@makers/deepseek-v4-flash"
+
+# base_url 指向 makers / edgeone 网关 = 十有八九读到了平台预置变量，而不是你自己的模型服务
+_GATEWAY_HINT = any(
+    token in (_base_url or "").lower() for token in ("makers", "edgeone")
+)
+
+if not _api_key:
+    # 不能直接传给 AsyncOpenAI（None 会在导入期抛 OpenAIError，整个函数 500，比 401 更难查）。
+    # 塞占位符，让请求真的发出去、由上游返回 401，前端就能看到明确的鉴权错误。
+    logger.error(
+        "[llm-config] 未找到 API key：LLM_API_KEY / AI_GATEWAY_API_KEY 均为空。"
+        "线上需在 Makers 控制台配置环境变量后重新部署。"
+    )
+    _api_key = "missing-api-key"
+
+logger.log(
+    f"[llm-config] model={_model}({_model_src or '默认值'}) "
+    f"base_url={_base_url or '<SDK 默认 api.openai.com>'}({_base_url_src or '无'}) "
+    f"key={_mask(_api_key)}({_api_key_src or '无'})"
+    + ("｜警告：base_url 指向 makers/edgeone 平台网关，可能被平台预置变量顶掉" if _GATEWAY_HINT else "")
+)
+
+
 # ========== LLM Model ==========
 llm_client = AsyncOpenAI(
-    api_key=os.getenv("AI_GATEWAY_API_KEY"),
-    base_url=os.getenv("AI_GATEWAY_BASE_URL"),
+    api_key=_api_key,
+    base_url=_base_url or None,
+    timeout=120.0,
+    # 免费模型（glm-4.7-flash）限流严重，429 时由 SDK 指数退避重试，别让用户看到裸 429
+    max_retries=4,
 )
 
 llm_model = OpenAIChatCompletionsModel(
-    model=os.getenv("AI_GATEWAY_MODEL", "@makers/deepseek-v4-flash"),
+    model=_model,
     openai_client=llm_client,
 )
 
@@ -328,11 +393,38 @@ async def handler(context: Any) -> AsyncGenerator[str, None]:
         body_attr = getattr(e, "body", None)
         if body_attr and detail == str(e):
             detail = body_attr
-        yield sse_event("error", {
+
+        # 鉴权失败大概率是「部署环境没拿到你的模型凭据」而不是模型服务挂了。
+        # 这里把实际生效的 base_url / model / key 来源一并吐给前端，省掉翻日志猜的过程。
+        hint = None
+        if status in (401, 403):
+            hint = (
+                f"模型鉴权失败（HTTP {status}）。当前生效配置："
+                f"base_url={_base_url or '<未配置，SDK 默认 api.openai.com>'}（来源 {_base_url_src or '无'}）、"
+                f"model={_model}（来源 {_model_src or '默认值'}）、key={_mask(_api_key)}"
+                f"（来源 {_api_key_src or '无'}）。"
+                "线上没有 .env，必须在 Makers 控制台的环境变量里配置 "
+                "LLM_API_KEY / LLM_BASE_URL / LLM_MODEL 后重新部署；"
+                "若 base_url 指向 makers/edgeone 网关，说明配置被平台预置变量顶掉了。"
+            )
+            logger.error(f"[stream] {hint}")
+
+        payload: dict[str, Any] = {
             "message": str(e),
             "errorType": type(e).__name__,
             "status": status,
             "detail": detail,
-        })
+        }
+        if hint:
+            payload["hint"] = hint
+            payload["llm"] = {
+                "base_url": _base_url or None,
+                "base_url_source": _base_url_src or None,
+                "model": _model,
+                "model_source": _model_src or None,
+                "api_key": _mask(_api_key),
+                "api_key_source": _api_key_src or None,
+            }
+        yield sse_event("error", payload)
     finally:
         yield sse_event("done", {"stopped": stopped})
