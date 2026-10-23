@@ -5,7 +5,7 @@
   flex-direction: column;
   gap: 8px;
   flex-shrink: 0;
-  background: rgba(255,255,255,.015);
+  background: rgba(31,41,51,.02);
 }
 
 /* preset chips */
@@ -87,7 +87,7 @@
   border-radius: 50%;
   border: none;
   background: var(--accent-gold);
-  color: #0a0a0f;
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -96,12 +96,12 @@
   transition: background var(--transition-fast),
               transform var(--transition-fast),
               box-shadow var(--transition-fast);
-  box-shadow: 0 0 12px var(--accent-gold-glow);
+  box-shadow: 0 2px 8px rgba(31, 41, 51, 0.18);
 }
 .sendBtn:hover:not(:disabled) {
-  background: #ffe066;
+  background: #173c55;
   transform: scale(1.07);
-  box-shadow: 0 0 20px var(--accent-gold-glow);
+  box-shadow: 0 4px 14px rgba(31, 41, 51, 0.25);
 }
 .sendBtn:active:not(:disabled) { transform: scale(.95); }
 .sendDisabled {
@@ -162,7 +162,7 @@
 .clearBtn:hover:not(:disabled) {
   color: var(--text-primary);
   border-color: var(--text-muted);
-  background: rgba(255,255,255,.06);
+  background: rgba(31,41,51,.06);
   transform: scale(1.07);
 }
 .clearBtn:active:not(:disabled) { transform: scale(.95); }

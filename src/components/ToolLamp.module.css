@@ -37,7 +37,7 @@
   background: linear-gradient(
     105deg,
     transparent       20%,
-    rgba(245,200,66,.4) 50%,
+    color-mix(in srgb, var(--accent-gold) 40%, transparent) 50%,
     transparent       80%
   );
   transform: translateX(-130%) skewX(-20deg);
@@ -54,7 +54,7 @@
   position: absolute;
   inset: 0;
   border-radius: 999px;
-  border: 1.5px solid rgba(245,200,66,.75);
+  border: 1.5px solid color-mix(in srgb, var(--accent-gold) 75%, transparent);
   pointer-events: none;
   opacity: 0;
   z-index: 0;
@@ -82,14 +82,14 @@
    ══════════════════════════════════════════════════════════ */
 .active {
   color: var(--accent-gold);
-  border-color: rgba(245,200,66,.55);
+  border-color: color-mix(in srgb, var(--accent-gold) 55%, transparent);
   background: var(--accent-gold-dim);
   box-shadow:
     0 0  8px var(--accent-gold-glow),
-    0 0 22px rgba(245,200,66,.12),
-    0 0 40px rgba(245,200,66,.06),
-    inset 0  1px 0 rgba(255,255,255,.09),
-    inset 0 -1px 0 rgba(245,200,66,.06);
+    0 0 22px color-mix(in srgb, var(--accent-gold) 12%, transparent),
+    0 0 40px color-mix(in srgb, var(--accent-gold) 6%, transparent),
+    inset 0  1px 0 rgba(255,255,255,.5),
+    inset 0 -1px 0 color-mix(in srgb, var(--accent-gold) 6%, transparent);
   animation: chipIgnite 520ms cubic-bezier(.34, 1.35, .64, 1) both;
 }
 

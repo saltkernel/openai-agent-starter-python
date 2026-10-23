@@ -16,7 +16,7 @@ import ToolIndicators from './components/ToolIndicators';
 import ChatWindow from './components/ChatWindow';
 import ChatInput from './components/ChatInput';
 import DebugPanel from './components/DebugPanel';
-import CodeViewer from './components/CodeViewer';
+import CitationPanel from './components/CitationPanel';
 import ConversationSidebar from './components/ConversationSidebar';
 import GitHubLink from './components/GitHubLink';
 import DeployLink from './components/DeployLink';
@@ -138,7 +138,7 @@ function AppInner() {
   const [loading, setLoading]   = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [debugEvents, setDebugEvents] = useState<RawSseEvent[]>([]);
-  const [rightPanelMode, setRightPanelMode] = useState<'code' | 'debug'>('code');
+  const [rightPanelMode, setRightPanelMode] = useState<'citations' | 'debug'>('citations');
 
   // Conversation list (sidebar) state
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -497,7 +497,7 @@ function AppInner() {
     setActiveConversationId(newId);
     setMessages([]);
     setDebugEvents([]);
-    setRightPanelMode('code');
+    setRightPanelMode('citations');
     setLoading(false);
     initDoneRef.current = false;
   }, [refreshConversations]);
@@ -529,7 +529,7 @@ function AppInner() {
     localStorage.setItem(CONVERSATION_ID_STORAGE_KEY, id);
     conversationIdRef.current = id;
     setActiveConversationId(id);
-    setRightPanelMode('code');
+    setRightPanelMode('citations');
     void loadConversation(id);
   }, [loading, loadConversation]);
 
@@ -543,7 +543,7 @@ function AppInner() {
     setActiveConversationId(newId);
     setMessages([]);
     setDebugEvents([]);
-    setRightPanelMode('code');
+    setRightPanelMode('citations');
     initDoneRef.current = false;
     setHistoryLoading(false);
   }, [loading]);
@@ -579,7 +579,7 @@ function AppInner() {
       setActiveConversationId(newId);
       setMessages([]);
       setDebugEvents([]);
-      setRightPanelMode('code');
+      setRightPanelMode('citations');
       initDoneRef.current = false;
       setHistoryLoading(false);
     }
@@ -595,9 +595,6 @@ function AppInner() {
 
   return (
     <div className={styles.shell}>
-      <div className={styles.blob1} />
-      <div className={styles.blob2} />
-
       <div className={styles.stage}>
         <ConversationSidebar
           conversations={conversations}
@@ -636,8 +633,12 @@ function AppInner() {
         </div>
 
         <div className={styles.codePanel}>
-          {rightPanelMode === 'code' ? (
-            <CodeViewer />
+          {rightPanelMode === 'citations' ? (
+            <CitationPanel
+              messages={messages}
+              onShowDebug={() => setRightPanelMode('debug')}
+              debugActive={false}
+            />
           ) : (
             <DebugPanel events={debugEvents} onClear={() => setDebugEvents([])} />
           )}
